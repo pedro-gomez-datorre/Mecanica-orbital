@@ -1,0 +1,71 @@
+let satelite;
+let planeta;
+const dt = 0.2;
+const GM = 500;
+let hay_satelite = false;
+let hay_velocidad = false;
+
+function setup() {
+  createCanvas(600, 600);
+  planeta = createVector(width / 2, height / 2);
+  satelite = {
+    pos: createVector(0, 0),
+    v: createVector(0, 0)
+  };
+}
+
+function draw() {
+  background(255);
+
+  if (!hay_satelite) {
+    dibujaPlaneta();
+    ellipse(mouseX, mouseY, 20);
+  } else if (!hay_velocidad) {
+    dibujaPlaneta();
+    dibujaSatelite();
+    dibujaVelocidad();
+  } else {
+    dibujaPlaneta();
+    dibujaSatelite();
+    actualizaPosiciones();
+  }
+}
+
+function dibujaPlaneta() {
+  noStroke();
+  fill('blue');
+  ellipse(planeta.x, planeta.y, 200);
+}
+
+function dibujaSatelite() {
+  noStroke();
+  fill(0);
+  ellipse(satelite.pos.x, satelite.pos.y, 20);
+}
+
+function dibujaVelocidad() {
+  stroke(1);
+  fill('red');
+  line(satelite.pos.x, satelite.pos.y, mouseX, mouseY);
+}
+
+function mouseClicked() {
+  if (!hay_satelite) {
+    satelite.pos = createVector(mouseX, mouseY);
+    hay_satelite = true;
+  } else if (!hay_velocidad) {
+    satelite.v = createVector(mouseX, mouseY).sub(satelite.pos);
+    satelite.v.div(100);
+    hay_velocidad = true;
+  }
+}
+
+function actualizaPosiciones() {
+  let r = satelite.pos.copy().sub(planeta);
+  let dist = r.mag();
+  if (dist === 0) return;
+
+  let a = r.copy().mult(-GM / (dist * dist * dist));
+  satelite.v.add(a.mult(dt));
+  satelite.pos.add(satelite.v.copy().mult(dt));
+}
