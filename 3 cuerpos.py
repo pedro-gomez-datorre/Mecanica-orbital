@@ -1,5 +1,6 @@
 import json
 import os
+import math
 
 import pygame
 import numpy as np
@@ -62,8 +63,8 @@ def open_help():
         ("Save a preset", 14, "normal"),
         ("", 12, "normal"),
 
-        ("Number + TAB", 14, "normal"),
-        ("Load a preset", 14, "normal"),
+        ("RightClick + new name", 14, "normal"),
+        ("Rename a preset", 14, "normal"),
         ("", 12, "normal"),
 
         ("Backspace", 14, "normal"),
@@ -168,7 +169,6 @@ preset_scroll = 0
 renaming = False
 rename_index = 0
 
-import math
 
 pygame.init()
 
@@ -199,6 +199,63 @@ def screen_to_world(pos):
 def get_speed(body):
     return np.linalg.norm(body["vel"])
 
+def get_hovered_body():
+    mouse_pos = np.array(pygame.mouse.get_pos(), dtype=float)
+
+    for i, body in enumerate(bodies):
+        screen_pos = world_to_screen(body["pos"])
+        distance = np.linalg.norm(mouse_pos - screen_pos)
+
+        if distance <= body["radius"] * zoom:
+            return i, body
+
+    return None, None
+
+def draw_tooltip():
+    index, body = get_hovered_body()
+
+    if body is None:
+        return
+
+    mouse_x, mouse_y = pygame.mouse.get_pos()
+
+    speed = get_speed(body)
+    angle = get_angle(body)
+
+    lines = [
+        f"Body {index + 1}",
+        "",
+        f"Mass: {body['mass']:.2f} kg",
+        f"Position X: {body['pos'][0]:.2f} m",
+        f"Position Y: {body['pos'][1]:.2f} m",
+        "",
+        f"Velocity X: {body['vel'][0]:.2f} m/s",
+        f"Velocity Y: {body['vel'][1]:.2f} m/s",
+        f"Speed: {speed:.2f} m/s",
+        f"Angle: {angle:.2f}°"
+    ]
+
+    width = 150
+    height = len(lines)*18+16
+
+    tooltip_x = mouse_x+15
+    tooltip_y = mouse_y+15
+
+    if tooltip_x + width > 600:
+        tooltip_x = mouse_x-width-15
+
+    if tooltip_y + height > 600:
+        tooltip_y = mouse_y-width-15
+
+    pygame.draw.rect(screen, (40, 40, 40), (tooltip_x, tooltip_y, width, height))
+
+    pygame.draw.rect(screen, (220, 220, 220), (tooltip_x, tooltip_y, width, height), 2)
+
+    for i, line in enumerate(lines):
+        text = font.render(line, True, (255, 255, 255))
+
+        screen.blit(text, (tooltip_x + 8, tooltip_y + 8 + i * 18))
+
 
 def get_angle(body):
     angle = math.degrees(math.atan2(body["vel"][1], body["vel"][0]))
@@ -208,7 +265,29 @@ def get_angle(body):
 
     return angle
 
+def set_body_count(count):
+    global display_body
+    global selected_body
 
+    if count == 2:
+        while len(bodies) > 2:
+            bodies.pop()
+
+    elif count == 3:
+        while len(bodies) < 3:
+            bodies.append({
+                "pos": np.array([300.0, 200.0]),
+                "vel": np.array([1.4, 0.0]),
+                "mass": 100,
+                "radius": 15,
+                "color": (0, 200, 0),
+                "trail": [],
+                "vector": np.array([0.0, 0.0])
+            })
+
+    display_body = None
+    selected_body = None
+    
 def set_speed_angle(body, speed, angle):
     angle_rad = math.radians(angle)
 
@@ -335,6 +414,24 @@ def draw():
 
     text = Font.render("Body Settings", True, (0, 0, 0))
     screen.blit(text, (620, 25))
+    screen.blit(font.render("Bodies:", True, text_color), (620, 50))
+
+    if len(bodies) == 2:
+        button_color = (160, 160, 160)
+    else:
+        button_color = (195, 195, 195)
+
+    pygame.draw.rect(screen, button_color, (680, 45, 45, 30), 5)
+    screen.blit(font.render("2", True, text_color), (697, 53))
+
+    if len(bodies) == 3:
+        button_color = (160, 160, 160)
+    else:
+        button_color = (195, 195, 195)
+
+    pygame.draw.rect(screen, button_color, (735, 45, 45, 30), 5)
+    screen.blit(font.render("3", True, text_color), (752, 53))
+
 
     if display_body is not None:
         screen.blit(font.render("Mass (kg):", True, (0, 0, 0)), (620, 65))
@@ -446,6 +543,8 @@ def draw():
 
     screen.blit(font.render("HELP", True, text_color), (40, 30))
 
+    draw_tooltip()
+
 def update_bodies():
     acc = [np.array([0.0, 0.0]) for _ in bodies]
 
@@ -518,10 +617,46 @@ def mouse_pressed(event):
 
 
     if event.type == pygame.MOUSEBUTTONDOWN:
+        mouse_x, mouse_y = pygame.mouse.get_pos()
+
+        if not running:
+                if 680 <= mouse_x <= 725 and 45 <= mouse_y <= 75:
+                    set_body_count(2)
+                    return
+
+                if 735 <= mouse_x <= 780 and 45 <= mouse_y <= 75:
+                    set_body_count(3)
+                    return
+            
+                if pygame.mouse.get_pos()[0] >= 800:
+                    button_height = 40
+                    button_spacing = 10
+                    start_y = 65 - preset_scroll
+
+                    mouse_x, mouse_y = pygame.mouse.get_pos()
+
+                    for i in range(len(presets)):
+                        y = start_y + i * (button_height + button_spacing)
+
+                        if 815 <= mouse_x <= 985 and y <= mouse_y <= y + button_height:
+                            if event.button == 1:
+                                load_preset(i)
+                                running = False
+                                return
+
+                            elif event.button == 3:
+                                renaming = True
+                                rename_index = i
+                                name = ""
+                                return
+
+                    if (815 <= mouse_x <= 985 and 525 <= mouse_y <= 565 and event.button == 1):
+                        save_preset()
+                        return
+
+                    return
 
         if event.button == 1:
-            mouse_x, mouse_y = pygame.mouse.get_pos()
-
             if 520 <= mouse_x <= 555 and 10 <= mouse_y <= 45:
                 zoom = max(0.2, zoom - zoom_step)
                 return
@@ -529,34 +664,8 @@ def mouse_pressed(event):
             if 560 <= mouse_x <= 595 and 10 <= mouse_y <= 45:
                 zoom = min(3.0, zoom + zoom_step)
                 return
-            
-        if pygame.mouse.get_pos()[0] >= 800:
-                button_height = 40
-                button_spacing = 10
-                start_y = 65 - preset_scroll
 
-                for i in range(len(presets)):
-                    y = start_y + i * (button_height + button_spacing)
 
-                    if event.button == 1:
-                        if pygame.mouse.get_pos()[0] >= 815 and pygame.mouse.get_pos()[0] <= 985 and pygame.mouse.get_pos()[1] >= y and pygame.mouse.get_pos()[1] <= y + button_height:
-                            load_preset(i)
-                            running = False
-                            return
-                    
-                    elif event.button == 3:
-                        renaming = True
-                        rename_index = i
-                        name = ""
-                        return
-
-                if pygame.mouse.get_pos()[0] >= 815 and pygame.mouse.get_pos()[0] <= 985 and pygame.mouse.get_pos()[1] >= 525 and pygame.mouse.get_pos()[1] <= 565:
-                    save_preset()
-                    return
-
-                return
-
-        if event.button == 1:
             if pygame.mouse.get_pos()[0] >= 20 and pygame.mouse.get_pos()[0] <= 100 and pygame.mouse.get_pos()[1] >= 10 and pygame.mouse.get_pos()[1] <= 50:
                 help_window = None
                 open_help()
@@ -741,10 +850,10 @@ def key_pressed(event):
         if saving:
             if event.key == pygame.K_RETURN:
                 if name != "":
-                    preset = {
-                        "name": name,
-                        "bodies": []
-                    }
+                    preset = {"name": name,
+                            "body_count": len(bodies),
+                            "bodies": []
+                        }
 
                     for body in bodies:
                         preset["bodies"].append({
@@ -925,7 +1034,7 @@ def key_pressed(event):
                             running = False
                             return
 
-            if event.key == pygame.K_RETURN:
+            if event.key == pygame.K_RETURN and not renaming and not saving:
                 running = True
 
 
@@ -963,22 +1072,32 @@ def load_preset(index):
 
     preset = presets[index]
 
-    if len(preset["bodies"]) != len(bodies):
-        return
+    body_count = preset.get("body_count", len(preset["bodies"]))
 
-    for i in range(len(bodies)):
+    set_body_count(body_count)
+
+    for i in range(body_count):
         body = bodies[i]
         data = preset["bodies"][i]
 
         body["pos"][0] = data["x"]
         body["pos"][1] = data["y"]
-        body["vel"] = np.array([data["vel_x"], data["vel_y"]])
+
+        body["vel"] = np.array([
+            data["vel_x"],
+            data["vel_y"]
+        ])
+
         body["mass"] = data["mass"]
-        body["vector"] = np.array([data["vector_x"], data["vector_y"]])
+
+        body["vector"] = np.array([
+            data["vector_x"],
+            data["vector_y"]
+        ])
+
         body["trail"].clear()
 
     display_body = None
-
 
 def save_preset():
     global name
