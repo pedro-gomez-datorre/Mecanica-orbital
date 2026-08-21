@@ -1,72 +1,94 @@
-import py5
 import json
 import os
 
+import pygame
+import numpy as np
+
+import tkinter as tk
+
+tk_root = tk.Tk()
+tk_root.withdraw()
+
 help_window = None
-class HelpWindow(py5.Sketch):
-
-    def settings(self):
-        self.size(400, 800)
-
-    def draw(self):
-        self.background(245)
-
-        self.fill(0)
-        self.text_size(28)
-        self.text("HELP", 30, 45)
-
-        self.text_size(16)
-
-        help_text = [
-            "CONTROLS",
-            "",
-            "Left Click + Drag",
-            "Move a body",
-            "",
-            "Right Click + Drag",
-            "Set the velocity of a body",
-            "",
-            "Space",
-            "Select the body under the mouse",
-            "",
-            "Enter",
-            "Start the simulation",
-            "",
-            "R",
-            "Reset to the default preset",
-            "",
-            "S",
-            "Save a preset",
-            "",
-            "Number + TAB",
-            "Load a preset",
-            "",
-            "Backspace",
-            "Delete a preset when hovering over it",
-        ]
-
-        y = 85
-
-        for line in help_text:
-            if line == "CONTROLS":
-                self.fill(50)
-                self.text_size(20)
-            elif line == "":
-                y += 10
-                continue
-            else:
-                self.fill(0)
-                self.text_size(16)
-
-            self.text(line, 30, y)
-            y += 25
 
 def open_help():
     global help_window
 
-    if help_window is None:
-        help_window = HelpWindow()
-        help_window.run_sketch()
+    if help_window is not None:
+        try:
+            help_window.lift()
+            help_window.focus_force()
+            return
+        except:
+            help_window = None
+
+    help_window = tk.Toplevel()
+    help_window.title("Help")
+    help_window.geometry("400x900")
+    help_window.resizable(False, False)
+
+    title = tk.Label(
+        help_window,
+        text="HELP",
+        font=("Arial", 24)
+    )
+    title.pack(anchor="w", padx=30, pady=(20, 10))
+
+    help_text = [
+        ("CONTROLS", 18, "bold"),
+        ("", 12, "normal"),
+
+        ("Left Click + Drag", 14, "normal"),
+        ("Move a body", 14, "normal"),
+        ("", 12, "normal"),
+
+        ("Right Click + Drag", 14, "normal"),
+        ("Set the velocity of a body", 14, "normal"),
+        ("", 12, "normal"),
+
+        ("Space", 14, "normal"),
+        ("Select the body under the mouse", 14, "normal"),
+        ("", 12, "normal"),
+
+        ("Enter", 14, "normal"),
+        ("Start the simulation", 14, "normal"),
+        ("", 12, "normal"),
+
+        ("R", 14, "normal"),
+        ("Reset to the default preset", 14, "normal"),
+        ("", 12, "normal"),
+
+        ("S", 14, "normal"),
+        ("Save a preset", 14, "normal"),
+        ("", 12, "normal"),
+
+        ("Number + TAB", 14, "normal"),
+        ("Load a preset", 14, "normal"),
+        ("", 12, "normal"),
+
+        ("Backspace", 14, "normal"),
+        ("Delete a preset when hovering over it", 14, "normal"),
+        ("", 12, "normal"),
+
+        ("Disclaimer", 14, "normal"),
+        ("The mass of the planets are not to scale", 12, "normal"),
+    ]
+
+    for text, size, weight in help_text:
+        label = tk.Label(
+            help_window,
+            text=text,
+            font=("Arial", size, weight),
+            anchor="w"
+        )
+        label.pack(fill="x", padx=30)
+
+    def close_help():
+        global help_window
+        help_window.destroy()
+        help_window = None
+
+    help_window.protocol("WM_DELETE_WINDOW", close_help)
 
 DEFAULT_PRESET = [
         {
@@ -108,8 +130,8 @@ presets = []
 preset_number = ''
 
 GM = 100
-dt = 0.02
-TRAIL_LENGTH = 300
+dt = 0.005
+TRAIL_LENGTH = 600
 VECTOR_SCALE = 40
 
 running = False
@@ -143,14 +165,43 @@ editing_angle = False
 
 preset_scroll = 0
 
+renaming = False
+rename_index = 0
+
 import math
 
+pygame.init()
+
+Font = pygame.font.Font(None, 20)
+font = pygame.font.Font(None, 16)
+
+text_color = (0, 0, 0)
+
+screen = pygame.display.set_mode((1000, 600))
+
+clock = pygame.time.Clock()
+
+zoom = 1.0
+zoom_step = 0.1
+
+def world_to_screen(pos):
+    return np.array([
+        pos[0] * zoom,
+        pos[1] * zoom
+    ])
+
+def screen_to_world(pos):
+    return np.array([
+        pos[0] / zoom,
+        pos[1] / zoom
+    ])
+
 def get_speed(body):
-    return body["vel"].mag
+    return np.linalg.norm(body["vel"])
 
 
 def get_angle(body):
-    angle = math.degrees(math.atan2(body["vel"].y, body["vel"].x))
+    angle = math.degrees(math.atan2(body["vel"][1], body["vel"][0]))
 
     if angle < 0:
         angle += 360
@@ -161,180 +212,194 @@ def get_angle(body):
 def set_speed_angle(body, speed, angle):
     angle_rad = math.radians(angle)
 
-    body["vel"] = py5.Py5Vector(
+    body["vel"] = np.array([
         math.cos(angle_rad) * speed,
         math.sin(angle_rad) * speed
-    )
+    ])
 
-    body["vector"] = body["vel"].copy
+    body["vector"] = body["vel"].copy()
 
 def setup():
-    py5.size(1000, 600)
-
     bodies.append({
-        "pos": py5.Py5Vector(150, 500),
-        "vel": py5.Py5Vector(0, -1),
+        "pos": np.array([150.0, 500.0]),
+        "vel": np.array([0.0, -1.0]),
         "mass": 100,
         "radius": 15,
-        "color": py5.color(255, 0, 0),
+        "color": (255, 0, 0),
         "trail": [],
-        "vector": py5.Py5Vector(0, 0)
+        "vector": np.array([0.0, 0.0])
     })
 
     bodies.append({
-        "pos": py5.Py5Vector(500, 500),
-        "vel": py5.Py5Vector(0, 1),
+        "pos": np.array([500.0, 500.0]),
+        "vel": np.array([0.0, 1.0]),
         "mass": 100,
         "radius": 15,
-        "color": py5.color(0, 150, 255),
+        "color": (0, 150, 255),
         "trail": [],
-        "vector": py5.Py5Vector(0, 0)
+        "vector": np.array([0.0, 0.0])
     })
 
     bodies.append({
-        "pos": py5.Py5Vector(300, 200),
-        "vel": py5.Py5Vector(1.4, 0),
+        "pos": np.array([300.0, 200.0]),
+        "vel": np.array([1.4, 0.0]),
         "mass": 100,
         "radius": 15,
-        "color": py5.color(0, 200, 0),
+        "color": (0, 200, 0),
         "trail": [],
-        "vector": py5.Py5Vector(0, 0)
+        "vector": np.array([0.0, 0.0])
     })
         
     load_presets_from_file()
 
 
 def draw():
-    py5.background(255)
+    screen.fill((255, 255, 255))
+
+    pygame.draw.rect(screen, (190, 190, 190), (520, 10, 35, 35), 5)
+    pygame.draw.rect(screen, (190, 190, 190), (560, 10, 35, 35), 5)
+
+    screen.blit(font.render("-", True, text_color), (532, 20))
+    screen.blit(font.render("+", True, text_color), (572, 20))
 
     if not running:
         if selected_body is not None:
-            selected_body["pos"].x = py5.mouse_x
-            selected_body["pos"].y = py5.mouse_y
+            selected_body["pos"] = screen_to_world(np.array(pygame.mouse.get_pos(), dtype=float))
 
         for body in bodies:
             vector = body["vector"]
 
-            if vector.mag > 0:
-                py5.stroke(body["color"])
-                py5.stroke_weight(3)
-                py5.line(
-                    body["pos"].x,
-                    body["pos"].y,
-                    body["pos"].x + vector.x * VECTOR_SCALE,
-                    body["pos"].y + vector.y * VECTOR_SCALE
+            if np.linalg.norm(vector) > 0:
+                pygame.draw.line(
+                    screen,
+                    body["color"],
+                    world_to_screen(body["pos"]).astype(int),
+                    world_to_screen(
+                        body["pos"] + vector * VECTOR_SCALE
+                    ).astype(int),
+                    max(1, int(3 * zoom))
                 )
 
         if velocity_body is not None:
-            py5.stroke(0)
-            py5.stroke_weight(3)
-            py5.line(
-                velocity_body["pos"].x,
-                velocity_body["pos"].y,
-                py5.mouse_x,
-                py5.mouse_y
+            pygame.draw.line(
+                screen,
+                (0, 0, 0),
+                world_to_screen(velocity_body["pos"]).astype(int),
+                pygame.mouse.get_pos(),
+                3
             )
 
-        py5.no_stroke()
-
         for body in bodies:
-            if body == display_body:
-                py5.fill(0)
-                py5.circle(body["pos"].x, body["pos"].y, body["radius"] * 3)
+            screen_pos = world_to_screen(body["pos"])
 
-            py5.fill(body["color"])
-            py5.circle(body["pos"].x, body["pos"].y, body["radius"] * 2)
+            if body is display_body:
+                pygame.draw.circle(
+                    screen,
+                    (0, 0, 0),
+                    screen_pos.astype(int),
+                    int((body["radius"]+5)*zoom)
+                )
+            
+            pygame.draw.circle(
+                screen,
+                body["color"],
+                screen_pos.astype(int),
+                int(body["radius"]*zoom)
+            )
 
     else:
         update_bodies()
 
-        py5.no_fill()
-        py5.stroke_weight(2)
+        for body in bodies:
+            if len(body["trail"]) > 1:
+                pygame.draw.lines(
+                    screen,
+                    body["color"],
+                    False,
+                    [world_to_screen(p).astype(int) for p in body["trail"]],
+                    max(1, int(2 * zoom))
+                )
 
         for body in bodies:
-            py5.stroke(body["color"])
-            py5.begin_shape()
+            screen_pos = world_to_screen(body["pos"])
+            pygame.draw.circle(
+                screen,
+                body["color"],
+                screen_pos.astype(int),
+                int(body["radius"]*zoom)
+            )
 
-            for p in body["trail"]:
-                py5.vertex(p.x, p.y)
+    pygame.draw.rect(screen, (230, 230, 230), (600, 0, 200, 600))
 
-            py5.end_shape()
+    pygame.draw.rect(screen, (180, 180, 180), (600, 0, 2, 600))
 
-        py5.no_stroke()
-
-        for body in bodies:
-            py5.fill(body["color"])
-            py5.circle(body["pos"].x, body["pos"].y, body["radius"] * 2)
-
-    py5.fill(230)
-    py5.no_stroke()
-    py5.rect(600, 0, 200, 600)
-
-    py5.fill(180)
-    py5.rect(600, 0, 2, 600)
-
-    py5.fill(0)
-    py5.text_size(20)
-    py5.text("Body Settings", 620, 40)
+    text = Font.render("Body Settings", True, (0, 0, 0))
+    screen.blit(text, (620, 25))
 
     if display_body is not None:
-        py5.text_size(16)
-
-        py5.text("Mass:", 620, 65)
-        py5.text("pos_x:", 620, 115)
-        py5.text("pos_y:", 620, 165)
-        py5.text("vel_x:", 620, 215)
-        py5.text("vel_y:", 620, 265)
-        py5.text("Speed:", 620, 315)
-        py5.text("Angle:", 620, 365)
-
-        py5.fill(0)
+        screen.blit(font.render("Mass (kg):", True, (0, 0, 0)), (620, 65))
+        screen.blit(font.render("pos_x (m):", True, (0, 0, 0)), (620, 115))
+        screen.blit(font.render("pos_y (m):", True, (0, 0, 0)), (620, 165))
+        screen.blit(font.render("vel_x (m/s):", True, (0, 0, 0)), (620, 215))
+        screen.blit(font.render("vel_y (m/s):", True, (0, 0, 0)), (620, 265))
+        screen.blit(font.render("Speed (m/s):", True, (0, 0, 0)), (620, 315))
+        screen.blit(font.render("Angle (°):", True, (0, 0, 0)), (620, 365))
 
         if editing_mass:
-            py5.text(mass_input, 630, 80)
+            text = font.render(mass_input, True, text_color)
         else:
-            py5.text(str(display_body["mass"]), 630, 80)
+            text = font.render(str(display_body["mass"]), True, text_color)
+
+        screen.blit(text, (630, 80))
 
         if editing_pos_x:
-            py5.text(pos_x_input, 630, 130)
+            text = font.render(pos_x_input, True, text_color)
         else:
-            py5.text(str(round(display_body["pos"].x, 2)), 630, 130)
+            text = font.render(str(round(display_body["pos"][0], 2)), True, text_color)
+
+        screen.blit(text, (630, 130))
 
         if editing_pos_y:
-            py5.text(pos_y_input, 630, 180)
+            text = font.render(pos_y_input, True, text_color)
         else:
-            py5.text(str(round(display_body["pos"].y, 2)), 630, 180)
+            text = font.render(str(round(display_body["pos"][1], 2)), True, text_color)
+
+        screen.blit(text, (630, 180))
 
         if editing_vel_x:
-            py5.text(vel_x_input, 630, 230)
+            text = font.render(vel_x_input, True, text_color)
         else:
-            py5.text(str(round(display_body["vel"].x, 2)), 630, 230)
+            text = font.render(str(round(display_body["vel"][0], 2)), True, text_color)
+
+        screen.blit(text, (630, 230))
 
         if editing_vel_y:
-            py5.text(vel_y_input, 630, 280)
+            text = font.render(vel_y_input, True, text_color)
         else:
-            py5.text(str(round(display_body["vel"].y, 2)), 630, 280)
+            text = font.render(str(round(display_body["vel"][1], 2)), True, text_color)
+
+        screen.blit(text, (630, 280))
 
         if editing_speed:
-            py5.text(speed_input, 630, 330)
+            text = font.render(speed_input, True, text_color)
         else:
-            py5.text(str(round(get_speed(display_body), 2)), 630, 330)
+            text = font.render(str(round(get_speed(display_body), 2)), True, text_color)
+
+        screen.blit(text, (630, 330))
 
         if editing_angle:
-            py5.text(angle_input, 630, 380)
+            text = font.render(angle_input, True, text_color)
         else:
-            py5.text(str(round(get_angle(display_body), 2)), 630, 380)
+            text = font.render(str(round(get_angle(display_body), 2)), True, text_color)
 
+        screen.blit(text, (630, 380))
 
-    py5.fill(215)
-    py5.rect(800, 0, 200, 600)
+    pygame.draw.rect(screen, (215, 215, 215), (800, 0, 200, 600))
 
-    py5.fill(180)
-    py5.rect(800, 0, 2, 600)
+    pygame.draw.rect(screen, (180, 180, 180), (800, 0, 2, 600))
 
-    py5.fill(0)
-    py5.text_size(22)
-    py5.text("Presets", 820, 40)
+    text = Font.render("Presets", True, text_color)
+    screen.blit(text, (820, 40))
 
     button_height = 40
     button_spacing = 10
@@ -349,60 +414,53 @@ def draw():
         if y > 510:
             continue
 
-        if py5.mouse_x >= 815 and py5.mouse_x <= 985 and py5.mouse_y >= y and py5.mouse_y <= y + button_height:
-            py5.fill(180)
+        if pygame.mouse.get_pos()[0] >= 815 and pygame.mouse.get_pos()[0] <= 985 and pygame.mouse.get_pos()[1] >= y and pygame.mouse.get_pos()[1] <= y + button_height:
+            button_color = (180, 180, 180)
         else:
-            py5.fill(195)
+            button_color = (195, 195, 195)
 
-        py5.rect(815, y, 170, button_height, 6)
+        pygame.draw.rect(screen, button_color, (815, y, 170, button_height), 6)
 
-        py5.fill(0)
-        py5.text_size(15)
-        py5.text(presets[i]["name"], 830, y + 26)
+        text = font.render(presets[i]["name"], True, text_color)
+        screen.blit(text, (830, y + 16))
 
-    if py5.mouse_x >= 815 and py5.mouse_x <= 985 and py5.mouse_y >= 525 and py5.mouse_y <= 565:
-        py5.fill(170)
+    if pygame.mouse.get_pos()[0] >= 815 and pygame.mouse.get_pos()[0] <= 985 and pygame.mouse.get_pos()[1] >= 525 and pygame.mouse.get_pos()[1] <= 565:
+        button_color = (170, 170, 170)
     else:
-        py5.fill(190)
+        button_color = (190, 190, 190)
 
-    py5.rect(815, 525, 170, 40, 6)
-    py5.rect(20, 10, 80, 40, 6)
+    pygame.draw.rect(screen, button_color, (815, 525, 170, 40), 6)
+    pygame.draw.rect(screen, button_color, (20, 10, 80, 40), 6)
 
     if saving:
-        py5.fill(255)
-        py5.rect(810, 450, 180, 55, 6)
-
-        py5.fill(0)
-        py5.text_size(14)
-        py5.text("Preset name:", 815, 445)
-        py5.text(name, 820, 482)
-
-    py5.fill(0)
-    py5.text_size(14)
-    py5.text("SAVE PRESET", 850, 550)
-
-    py5.fill(0)
-    py5.text_size(20)
-    py5.text("HELP", 40, 35)
+        pygame.draw.rect(screen, (255, 255, 255), (810, 450, 180, 55), 6)
 
 
+        text = font.render("Preset name:", True, text_color)
+        screen.blit(text, (815, 445))
 
+        text = font.render(name, True, text_color)
+        screen.blit(text, (820, 480))
+
+    screen.blit(font.render("SAVE PRESET", True, text_color), (850, 550))
+
+    screen.blit(font.render("HELP", True, text_color), (40, 30))
 
 def update_bodies():
-    acc = [py5.Py5Vector(0, 0) for _ in bodies]
+    acc = [np.array([0.0, 0.0]) for _ in bodies]
 
     for i in range(len(bodies)):
         for j in range(i + 1, len(bodies)):
             r = bodies[j]["pos"] - bodies[i]["pos"]
-            d = r.mag
+            d = np.linalg.norm(r)
 
             if d < 10:
                 d = 10
 
             force = GM / (d ** 3)
 
-            ai = r.copy * (force * bodies[j]["mass"])
-            aj = r.copy * (-force * bodies[i]["mass"])
+            ai = r.copy() * (force * bodies[j]["mass"])
+            aj = r.copy() * (-force * bodies[i]["mass"])
 
             acc[i] += ai
             acc[j] += aj
@@ -410,7 +468,7 @@ def update_bodies():
     for i in range(len(bodies)):
         bodies[i]["vel"] += acc[i] * dt
         bodies[i]["pos"] += bodies[i]["vel"] * dt
-        bodies[i]["trail"].append(bodies[i]["pos"].copy)
+        bodies[i]["trail"].append(bodies[i]["pos"].copy())
 
         if len(bodies[i]["trail"]) > TRAIL_LENGTH:
             bodies[i]["trail"].pop(0)
@@ -418,13 +476,13 @@ def update_bodies():
 
 def update_velocity_vector():
     if display_body is not None:
-        display_body["vector"] = py5.Py5Vector(
-            display_body["vel"].x,
-            display_body["vel"].y
-        )
+        display_body["vector"] = np.array([
+            display_body["vel"][0],
+            display_body["vel"][1]
+        ])
 
 
-def mouse_pressed():
+def mouse_pressed(event):
     global selected_body
     global velocity_body
     global velocity_start
@@ -450,363 +508,29 @@ def mouse_pressed():
     global running
     global help_window
 
-    if running:
-        return
-
-    if py5.mouse_button == py5.LEFT:
-        if py5.mouse_x >= 20 and py5.mouse_x <= 100 and py5.mouse_y >= 10 and py5.mouse_y <= 50:
-            help_window = None
-            open_help()
-            return
-        
-        if py5.mouse_x >= 800:
-            button_height = 40
-            button_spacing = 10
-            start_y = 65 - preset_scroll
-
-            for i in range(len(presets)):
-                y = start_y + i * (button_height + button_spacing)
-
-                if py5.mouse_x >= 815 and py5.mouse_x <= 985 and py5.mouse_y >= y and py5.mouse_y <= y + button_height:
-                    load_preset(i)
-                    running = False
-                    return
-
-            if py5.mouse_x >= 815 and py5.mouse_x <= 985 and py5.mouse_y >= 525 and py5.mouse_y <= 565:
-                save_preset()
-                return
-
-            return
-
-        if py5.mouse_x >= 600:
-            text_distance_mass = py5.dist(py5.mouse_x, py5.mouse_y, 630, 80)
-
-            if text_distance_mass < 25:
-                if display_body is not None:
-                    editing_mass = True
-                    mass_input = str(display_body["mass"])
-                return
-
-            text_distance_pos_x = py5.dist(py5.mouse_x, py5.mouse_y, 630, 130)
-
-            if text_distance_pos_x < 25:
-                if display_body is not None:
-                    editing_pos_x = True
-                    pos_x_input = str(display_body["pos"].x)
-                return
-
-            text_distance_pos_y = py5.dist(py5.mouse_x, py5.mouse_y, 630, 180)
-
-            if text_distance_pos_y < 25:
-                if display_body is not None:
-                    editing_pos_y = True
-                    pos_y_input = str(display_body["pos"].y)
-                return
-
-            text_distance_vel_x = py5.dist(py5.mouse_x, py5.mouse_y, 630, 230)
-
-            if text_distance_vel_x < 25:
-                if display_body is not None:
-                    editing_vel_x = True
-                    vel_x_input = str(display_body["vel"].x)
-                return
-
-            text_distance_vel_y = py5.dist(py5.mouse_x, py5.mouse_y, 630, 280)
-
-            if text_distance_vel_y < 25:
-                if display_body is not None:
-                    editing_vel_y = True
-                    vel_y_input = str(display_body["vel"].y)
-                return
-
-            text_distance_speed = py5.dist(py5.mouse_x, py5.mouse_y, 630, 330)
-
-            if text_distance_speed < 25:
-                if display_body is not None:
-                    editing_speed = True
-                    speed_input = str(round(get_speed(display_body), 2))
-                return
-
-
-            text_distance_angle = py5.dist(py5.mouse_x, py5.mouse_y, 630, 380)
-
-            if text_distance_angle < 25:
-                if display_body is not None:
-                    editing_angle = True
-                    angle_input = str(round(get_angle(display_body), 2))
-                return
-
-            return
-
-        for body in bodies:
-            distance = py5.dist(
-                py5.mouse_x,
-                py5.mouse_y,
-                body["pos"].x,
-                body["pos"].y
-            )
-
-            if distance < body["radius"]:
-                selected_body = body
-                break
-
-    elif py5.mouse_button == py5.RIGHT:
-        if py5.mouse_x >= 600:
-            return
-
-        for body in bodies:
-            distance = py5.dist(
-                py5.mouse_x,
-                py5.mouse_y,
-                body["pos"].x,
-                body["pos"].y
-            )
-
-            if distance < body["radius"]:
-                velocity_body = body
-                velocity_start = py5.Py5Vector(body["pos"].x, body["pos"].y)
-                break
-
-
-def mouse_released():
-    global selected_body
-    global velocity_body
-    global velocity_start
-
-    if py5.mouse_button == py5.LEFT:
-        selected_body = None
-
-    elif py5.mouse_button == py5.RIGHT:
-        if velocity_body is not None:
-            velocity_end = py5.Py5Vector(py5.mouse_x, py5.mouse_y)
-            velocity = velocity_end - velocity_start
-
-            velocity_body["vel"] = velocity * 0.025
-            velocity_body["vector"] = velocity.copy * 0.025
-
-        velocity_body = None
-        velocity_start = None
-
-
-def key_pressed():
-    global running
-    global editing_mass
-    global mass_input
-
-    global pos_x_input
-    global editing_pos_x
-    global pos_y_input
-    global editing_pos_y
-
-    global vel_x_input
-    global editing_vel_x
-    global vel_y_input
-    global editing_vel_y
-
-    global display_body
-
-    global preset_number
-
+    global renaming
+    global rename_index
     global name
-    global saving
 
-    global speed_input
-    global editing_speed
-    global angle_input
-    global editing_angle
+    global zoom
 
-    if saving:
-        if py5.key == py5.ENTER:
-            if name != "":
-                preset = {
-                    "name": name,
-                    "bodies": []
-                }
+    mouse_pos = np.array(pygame.mouse.get_pos(), dtype=float)
 
-                for body in bodies:
-                    preset["bodies"].append({
-                        "x": body["pos"].x,
-                        "y": body["pos"].y,
-                        "vel_x": body["vel"].x,
-                        "vel_y": body["vel"].y,
-                        "mass": body["mass"],
-                        "vector_x": body["vector"].x,
-                        "vector_y": body["vector"].y
-                    })
 
-                presets.append(preset)
+    if event.type == pygame.MOUSEBUTTONDOWN:
 
-                with open(PRESET_FILE, "w") as file:
-                    json.dump(presets, file, indent=4)
+        if event.button == 1:
+            mouse_x, mouse_y = pygame.mouse.get_pos()
 
-                name = ""
-                saving = False
-
-            return
-
-        elif py5.key == py5.BACKSPACE:
-            name = name[:-1]
-            return
-
-        elif py5.key != py5.CODED:
-            name += py5.key
-            return
-    
-    if py5.key == 'r':
-        if running:
-            running = False
-
-        load_default_preset()
-
-    if not running:
-        if py5.key == ' ':
-            for body in bodies:
-                distance = py5.dist(
-                    py5.mouse_x,
-                    py5.mouse_y,
-                    body["pos"].x,
-                    body["pos"].y
-                )
-
-                if distance < body["radius"]:
-                    display_body = body
-                    break
-                else:
-                    display_body = None
-
-        if editing_mass:
-            if py5.key == py5.ENTER:
-                if mass_input != "":
-                    display_body["mass"] = float(mass_input)
-
-                editing_mass = False
-
-            elif py5.key == py5.BACKSPACE:
-                mass_input = mass_input[:-1]
-
-            elif py5.key in "0123456789.":
-                mass_input += py5.key
-
-            return
-
-        if editing_pos_x:
-            if py5.key == py5.ENTER:
-                if pos_x_input != "":
-                    display_body["pos"].x = float(pos_x_input)
-
-                editing_pos_x = False
-
-            elif py5.key == py5.BACKSPACE:
-                pos_x_input = pos_x_input[:-1]
-
-            elif py5.key in "0123456789.":
-                pos_x_input += py5.key
-
-            return
-
-        if editing_pos_y:
-            if py5.key == py5.ENTER:
-                if pos_y_input != "":
-                    display_body["pos"].y = float(pos_y_input)
-
-                editing_pos_y = False
-
-            elif py5.key == py5.BACKSPACE:
-                pos_y_input = pos_y_input[:-1]
-
-            elif py5.key in "0123456789.":
-                pos_y_input += py5.key
-
-            return
-
-        if editing_vel_x:
-            if py5.key == py5.ENTER:
-                if vel_x_input != "":
-                    display_body["vel"].x = float(vel_x_input)
-
-                update_velocity_vector()
-                editing_vel_x = False
-
-            elif py5.key == py5.BACKSPACE:
-                vel_x_input = vel_x_input[:-1]
-
-            elif py5.key in "0123456789.":
-                vel_x_input += py5.key
-
-            return
-
-        if editing_vel_y:
-            if py5.key == py5.ENTER:
-                if vel_y_input != "":
-                    display_body["vel"].y = float(vel_y_input)
-
-                update_velocity_vector()
-                editing_vel_y = False
-
-            elif py5.key == py5.BACKSPACE:
-                vel_y_input = vel_y_input[:-1]
-
-            elif py5.key in "0123456789.":
-                vel_y_input += py5.key
-
-            return
-
-        if editing_speed:
-            if py5.key == py5.ENTER:
-                if speed_input != "":
-                    speed = float(speed_input)
-                    angle = get_angle(display_body)
-                    set_speed_angle(display_body, speed, angle)
-
-                editing_speed = False
-
-            elif py5.key == py5.BACKSPACE:
-                speed_input = speed_input[:-1]
-
-            elif py5.key in "0123456789.":
-                speed_input += py5.key
-
-            return
-
-        if editing_angle:
-            if py5.key == py5.ENTER:
-                if angle_input != "":
-                    angle = float(angle_input)
-                    speed = get_speed(display_body)
-                    set_speed_angle(display_body, speed, angle)
-
-                editing_angle = False
-
-            elif py5.key == py5.BACKSPACE:
-                angle_input = angle_input[:-1]
-
-            elif py5.key in "0123456789.":
-                angle_input += py5.key
-
-            return
-
-        if py5.key == 's':
-            save_preset()
-            running = False
-            return
-
-        if py5.key in "0123456789":
-            preset_number += py5.key
-
-        if py5.key == py5.TAB:
-            try:
-                preset_number = int(preset_number)
-            except:
-                preset_number = ''
+            if 520 <= mouse_x <= 555 and 10 <= mouse_y <= 45:
+                zoom = max(0.2, zoom - zoom_step)
                 return
 
-            load_preset(preset_number)
-            running = False
-            preset_number = ''
-            return
-
-        if py5.key == py5.BACKSPACE:
-            if py5.mouse_x >= 800:
+            if 560 <= mouse_x <= 595 and 10 <= mouse_y <= 45:
+                zoom = min(3.0, zoom + zoom_step)
+                return
+            
+        if pygame.mouse.get_pos()[0] >= 800:
                 button_height = 40
                 button_spacing = 10
                 start_y = 65 - preset_scroll
@@ -814,13 +538,395 @@ def key_pressed():
                 for i in range(len(presets)):
                     y = start_y + i * (button_height + button_spacing)
 
-                    if py5.mouse_x >= 815 and py5.mouse_x <= 985 and py5.mouse_y >= y and py5.mouse_y <= y + button_height:
-                        delet_preset(i)
-                        running = False
+                    if event.button == 1:
+                        if pygame.mouse.get_pos()[0] >= 815 and pygame.mouse.get_pos()[0] <= 985 and pygame.mouse.get_pos()[1] >= y and pygame.mouse.get_pos()[1] <= y + button_height:
+                            load_preset(i)
+                            running = False
+                            return
+                    
+                    elif event.button == 3:
+                        renaming = True
+                        rename_index = i
+                        name = ""
                         return
 
-        if py5.key == py5.ENTER:
-            running = True
+                if pygame.mouse.get_pos()[0] >= 815 and pygame.mouse.get_pos()[0] <= 985 and pygame.mouse.get_pos()[1] >= 525 and pygame.mouse.get_pos()[1] <= 565:
+                    save_preset()
+                    return
+
+                return
+
+        if event.button == 1:
+            if pygame.mouse.get_pos()[0] >= 20 and pygame.mouse.get_pos()[0] <= 100 and pygame.mouse.get_pos()[1] >= 10 and pygame.mouse.get_pos()[1] <= 50:
+                help_window = None
+                open_help()
+                return
+
+                if running:
+                    return
+            
+
+            if pygame.mouse.get_pos()[0] >= 600:
+
+                point = np.array([630, 80])
+                text_distance_mass = np.linalg.norm(mouse_pos - point)
+
+                if text_distance_mass < 25:
+                    if display_body is not None:
+                        editing_mass = True
+                        mass_input = str(display_body["mass"])
+                    return
+
+                point = np.array([630, 130])
+                text_distance_pos_x = np.linalg.norm(mouse_pos - point)
+
+                if text_distance_pos_x < 25:
+                    if display_body is not None:
+                        editing_pos_x = True
+                        pos_x_input = str(display_body["pos"][0])
+                    return
+
+                point = np.array([630, 180])
+                text_distance_pos_y = np.linalg.norm(mouse_pos - point)
+
+                if text_distance_pos_y < 25:
+                    if display_body is not None:
+                        editing_pos_y = True
+                        pos_y_input = str(display_body["pos"][1])
+                    return
+
+                point = np.array([630, 230])
+                text_distance_vel_x = np.linalg.norm(mouse_pos - point)
+
+                if text_distance_vel_x < 25:
+                    if display_body is not None:
+                        editing_vel_x = True
+                        vel_x_input = str(display_body["vel"][0])
+                    return
+
+                point = np.array([630, 280])
+                text_distance_vel_y = np.linalg.norm(mouse_pos - point)
+
+                if text_distance_vel_y < 25:
+                    if display_body is not None:
+                        editing_vel_y = True
+                        vel_y_input = str(display_body["vel"][1])
+                    return
+
+                point = np.array([630, 330])
+                text_distance_speed = np.linalg.norm(mouse_pos - point)
+
+                if text_distance_speed < 25:
+                    if display_body is not None:
+                        editing_speed = True
+                        speed_input = str(round(get_speed(display_body), 2))
+                    return
+
+                point = np.array([630, 380])
+                text_distance_angle = np.linalg.norm(mouse_pos - point)
+
+                if text_distance_angle < 25:
+                    if display_body is not None:
+                        editing_angle = True
+                        angle_input = str(round(get_angle(display_body), 2))
+                    return
+
+                return
+
+            for body in bodies:
+                screen_pos = world_to_screen(body["pos"])
+                distance = np.linalg.norm(mouse_pos - screen_pos)
+
+                if distance < body["radius"]*zoom:
+                    selected_body = body
+                    break
+
+        if running:
+            return
+        
+        elif event.button == 3:
+            if pygame.mouse.get_pos()[0] >= 600:
+                return
+
+            for body in bodies:
+                screen_pos = world_to_screen(body["pos"])
+                distance = np.linalg.norm(mouse_pos - screen_pos)
+
+                if distance < body["radius"]*zoom:
+                    velocity_body = body
+                    velocity_start = world_to_screen(body["pos"]).copy()
+                    break
+
+
+def mouse_released(event):
+    global selected_body
+    global velocity_body
+    global velocity_start
+
+    if event.type == pygame.MOUSEBUTTONUP:
+        if event.button == 1:
+            selected_body = None
+
+        elif event.button == 3:
+            if velocity_body is not None:
+                velocity_end = np.array([pygame.mouse.get_pos()[0], pygame.mouse.get_pos()[1]])
+                velocity = velocity_end - velocity_start
+
+                velocity_body["vel"] = velocity * 0.025
+                velocity_body["vector"] = velocity.copy() * 0.025
+
+            velocity_body = None
+            velocity_start = None
+
+
+def key_pressed(event):
+        global running
+        global editing_mass
+        global mass_input
+
+        global pos_x_input
+        global editing_pos_x
+        global pos_y_input
+        global editing_pos_y
+
+        global vel_x_input
+        global editing_vel_x
+        global vel_y_input
+        global editing_vel_y
+
+        global display_body
+
+        global preset_number
+
+        global name
+        global saving
+
+        global speed_input
+        global editing_speed
+        global angle_input
+        global editing_angle
+
+        global renaming
+        global rename_index
+
+        if renaming:
+            if event.key == pygame.K_RETURN:
+                if name != "":
+                    presets[rename_index]["name"] = name
+
+                    with open(PRESET_FILE, "w") as file:
+                        json.dump(presets, file, indent=4)
+
+                name = ""
+                renaming = False
+                rename_index = None
+                return
+
+            elif event.key == pygame.K_ESCAPE:
+                name = ""
+                renaming = False
+                rename_index = None
+                return
+
+            elif event.key == pygame.K_BACKSPACE:
+                name = name[:-1]
+                return
+
+            else:
+                if event.unicode.isprintable():
+                    name += event.unicode
+
+                return
+
+        if saving:
+            if event.key == pygame.K_RETURN:
+                if name != "":
+                    preset = {
+                        "name": name,
+                        "bodies": []
+                    }
+
+                    for body in bodies:
+                        preset["bodies"].append({
+                            "x": body["pos"][0],
+                            "y": body["pos"][1],
+                            "vel_x": body["vel"][0],
+                            "vel_y": body["vel"][1],
+                            "mass": body["mass"],
+                            "vector_x": body["vector"][0],
+                            "vector_y": body["vector"][1]
+                        })
+
+                    presets.append(preset)
+
+                    with open(PRESET_FILE, "w") as file:
+                        json.dump(presets, file, indent=4)
+
+                    name = ""
+                    saving = False
+
+                return
+
+            elif event.key == pygame.K_BACKSPACE:
+                name = name[:-1]
+                return
+
+            else:
+                name += event.unicode
+                return
+        
+        if event.key == pygame.K_r:
+            if running:
+                running = False
+
+            load_default_preset()
+
+            return
+
+        if not running:
+            if event.key == pygame.K_SPACE:
+                mouse_pos = np.array(pygame.mouse.get_pos(), dtype=float)
+
+                display_body = None
+
+                for body in bodies:
+                    screen_pos = world_to_screen(body["pos"])
+                    distance = np.linalg.norm(mouse_pos - screen_pos)
+
+                    if distance <= body["radius"]:
+                        display_body = body
+                        break
+
+                return
+
+            if editing_mass:
+                if event.key == pygame.K_RETURN:
+                    if mass_input != "":
+                        display_body["mass"] = float(mass_input)
+
+                    editing_mass = False
+
+                elif event.key == pygame.K_BACKSPACE:
+                    mass_input = mass_input[:-1]
+
+                elif event.unicode in "0123456789.":
+                    mass_input += event.unicode
+
+                return
+
+            if editing_pos_x:
+                if event.key == pygame.K_RETURN:
+                    if pos_x_input != "":
+                        display_body["pos"][0] = float(pos_x_input)
+
+                    editing_pos_x = False
+
+                elif event.key == pygame.K_BACKSPACE:
+                    pos_x_input = pos_x_input[:-1]
+
+                elif event.unicode in "0123456789.":
+                    pos_x_input += event.unicode
+
+                return
+
+            if editing_pos_y:
+                if event.key == pygame.K_RETURN:
+                    if pos_y_input != "":
+                        display_body["pos"][1] = float(pos_y_input)
+
+                    editing_pos_y = False
+
+                elif event.key == pygame.K_BACKSPACE:
+                    pos_y_input = pos_y_input[:-1]
+
+                elif event.unicode in "0123456789.":
+                    pos_y_input += event.unicode
+
+                return
+
+            if editing_vel_x:
+                if event.key == pygame.K_RETURN:
+                    if vel_x_input != "":
+                        display_body["vel"][0] = float(vel_x_input)
+
+                    update_velocity_vector()
+                    editing_vel_x = False
+
+                elif event.key == pygame.K_BACKSPACE:
+                    vel_x_input = vel_x_input[:-1]
+
+                elif event.unicode in "0123456789.":
+                    vel_x_input += event.unicode
+
+                return
+
+            if editing_vel_y:
+                if event.key == pygame.K_RETURN:
+                    if vel_y_input != "":
+                        display_body["vel"][1] = float(vel_y_input)
+
+                    update_velocity_vector()
+                    editing_vel_y = False
+
+                elif event.key == pygame.K_BACKSPACE:
+                    vel_y_input = vel_y_input[:-1]
+
+                elif event.unicode in "0123456789.":
+                    vel_y_input += event.unicode
+
+                return
+
+            if editing_speed:
+                if event.key == pygame.K_RETURN:
+                    if speed_input != "":
+                        speed = float(speed_input)
+                        angle = get_angle(display_body)
+                        set_speed_angle(display_body, speed, angle)
+
+                    editing_speed = False
+
+                elif event.key == pygame.K_BACKSPACE:
+                    speed_input = speed_input[:-1]
+
+                elif event.unicode in "0123456789.":
+                    speed_input += event.unicode
+
+                return
+
+            if editing_angle:
+                if event.key == pygame.K_RETURN:
+                    if angle_input != "":
+                        angle = float(angle_input)
+                        speed = get_speed(display_body)
+                        set_speed_angle(display_body, speed, angle)
+
+                    editing_angle = False
+
+                elif event.key == pygame.K_BACKSPACE:
+                    angle_input = angle_input[:-1]
+
+                elif event.unicode in "0123456789.":
+                    angle_input += event.unicode
+
+                return
+
+
+            if event.key == pygame.K_BACKSPACE:
+                if pygame.mouse.get_pos()[0] >= 800:
+                    button_height = 40
+                    button_spacing = 10
+                    start_y = 65 - preset_scroll
+
+                    for i in range(len(presets)):
+                        y = start_y + i * (button_height + button_spacing)
+
+                        if pygame.mouse.get_pos()[0] >= 815 and pygame.mouse.get_pos()[0] <= 985 and pygame.mouse.get_pos()[1] >= y and pygame.mouse.get_pos()[1] <= y + button_height:
+                            delet_preset(i)
+                            running = False
+                            return
+
+            if event.key == pygame.K_RETURN:
+                running = True
 
 
 def load_presets_from_file():
@@ -838,11 +944,11 @@ def load_default_preset():
         body = bodies[i]
         data = DEFAULT_PRESET[i]
 
-        body["pos"].x = data["x"]
-        body["pos"].y = data["y"]
-        body["vel"] = py5.Py5Vector(data["vel_x"], data["vel_y"])
+        body["pos"][0] = data["x"]
+        body["pos"][1] = data["y"]
+        body["vel"] = np.array([data["vel_x"], data["vel_y"]])
         body["mass"] = data["mass"]
-        body["vector"] = py5.Py5Vector(data["vector_x"], data["vector_y"])
+        body["vector"] = np.array([data["vector_x"], data["vector_y"]])
         body["trail"].clear() 
 
         
@@ -864,11 +970,11 @@ def load_preset(index):
         body = bodies[i]
         data = preset["bodies"][i]
 
-        body["pos"].x = data["x"]
-        body["pos"].y = data["y"]
-        body["vel"] = py5.Py5Vector(data["vel_x"], data["vel_y"])
+        body["pos"][0] = data["x"]
+        body["pos"][1] = data["y"]
+        body["vel"] = np.array([data["vel_x"], data["vel_y"]])
         body["mass"] = data["mass"]
-        body["vector"] = py5.Py5Vector(data["vector_x"], data["vector_y"])
+        body["vector"] = np.array([data["vector_x"], data["vector_y"]])
         body["trail"].clear()
 
     display_body = None
@@ -892,4 +998,30 @@ def delet_preset(index):
     with open(PRESET_FILE, "w") as file:
         json.dump(presets, file, indent=4)
 
-py5.run_sketch()
+
+setup()
+
+while True:
+    for event in pygame.event.get():
+
+        if event.type == pygame.QUIT:
+            pygame.quit()
+            exit()
+
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            mouse_pressed(event)
+
+        elif event.type == pygame.MOUSEBUTTONUP:
+            mouse_released(event)
+
+        elif event.type == pygame.KEYDOWN:
+            key_pressed(event)
+
+    if help_window is not None:
+        try:
+            help_window.update()
+        except tk.TclError:
+            help_window = None
+            
+    draw()
+    pygame.display.flip()
