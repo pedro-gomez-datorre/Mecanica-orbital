@@ -186,15 +186,18 @@ clock = pygame.time.Clock()
 zoom = 1.0
 zoom_step = 0.1
 
-def world_to_screen(pos):
-    center = np.array([300.0, 300.0])
+camera = np.array([300.0, 300.0])
+camera_speed = 10.0
 
-    return center + (pos - center) * zoom
+def world_to_screen(pos):
+    screen_center = np.array([300.0, 300.0])
+
+    return screen_center + (pos - camera) * zoom
 
 def screen_to_world(pos):
-    center = np.array([300.0, 300.0])
+    screen_center = np.array([300.0, 300.0])
 
-    return center + (pos - center) / zoom
+    return camera + (pos - screen_center) / zoom
 
 def format_distance(distance):
     if distance >= 1000:
@@ -349,6 +352,20 @@ def setup():
 
 def draw():
     screen.fill((255, 255, 255))
+    arrow_color = (200, 200, 200)
+
+    pygame.draw.rect(screen, arrow_color, (270, 10, 60, 35), 3)
+    screen.blit(font.render("UP", True, text_color), (292, 17))
+
+    pygame.draw.rect(screen, arrow_color, (235, 45, 60, 35), 3)
+    screen.blit(font.render("Left", True, text_color), (257, 52))
+
+    pygame.draw.rect(screen, arrow_color, (305, 45, 60, 35), 3)
+    screen.blit(font.render("RIGHT", True, text_color), (327, 52))
+
+    pygame.draw.rect(screen, arrow_color, (270, 80, 60, 35), 3)
+    screen.blit(font.render("DOWN", True, text_color), (292, 87))
+
 
     pygame.draw.rect(screen, (190, 190, 190), (520, 10, 35, 35), 5)
     pygame.draw.rect(screen, (190, 190, 190), (560, 10, 35, 35), 5)
@@ -629,6 +646,7 @@ def mouse_pressed(event):
     global name
 
     global zoom
+    global camera
 
     mouse_pos = np.array(pygame.mouse.get_pos(), dtype=float)
 
@@ -690,6 +708,22 @@ def mouse_pressed(event):
 
                 if running:
                     return
+
+            if 270 <= mouse_x <= 330 and 10 <= mouse_y <= 45:
+                camera[1] -= camera_speed / zoom
+                return
+
+            if 235 <= mouse_x <= 295 and 45 <= mouse_y <= 80:
+                camera[0] -= camera_speed / zoom
+                return
+
+            if 305 <= mouse_x <= 365 and 45 <= mouse_y <= 80:
+                camera[0] += camera_speed / zoom
+                return
+
+            if 270 <= mouse_x <= 330 and 80 <= mouse_y <= 115:
+                camera[1] += camera_speed / zoom
+                return
             
 
             if pygame.mouse.get_pos()[0] >= 600:
