@@ -357,14 +357,14 @@ def draw():
     pygame.draw.rect(screen, arrow_color, (270, 10, 60, 35), 3)
     screen.blit(font.render("UP", True, text_color), (292, 17))
 
-    pygame.draw.rect(screen, arrow_color, (235, 45, 60, 35), 3)
-    screen.blit(font.render("Left", True, text_color), (257, 52))
+    pygame.draw.rect(screen, arrow_color, (10, 280, 60, 35), 3)
+    screen.blit(font.render("Left", True, text_color), (20, 280))
 
-    pygame.draw.rect(screen, arrow_color, (305, 45, 60, 35), 3)
-    screen.blit(font.render("RIGHT", True, text_color), (327, 52))
+    pygame.draw.rect(screen, arrow_color, (540, 280, 60, 35), 3)
+    screen.blit(font.render("RIGHT", True, text_color), (550, 300))
 
-    pygame.draw.rect(screen, arrow_color, (270, 80, 60, 35), 3)
-    screen.blit(font.render("DOWN", True, text_color), (292, 87))
+    pygame.draw.rect(screen, arrow_color, (290, 560, 60, 35), 3)
+    screen.blit(font.render("DOWN", True, text_color), (300, 570))
 
 
     pygame.draw.rect(screen, (190, 190, 190), (520, 10, 35, 35), 5)
@@ -693,7 +693,7 @@ def mouse_pressed(event):
 
         if event.button == 1:
             if 520 <= mouse_x <= 555 and 10 <= mouse_y <= 45:
-                zoom = max(0.2, zoom - zoom_step)
+                zoom = max(0.15, zoom - zoom_step)
                 return
 
             if 560 <= mouse_x <= 595 and 10 <= mouse_y <= 45:
@@ -712,16 +712,16 @@ def mouse_pressed(event):
             if 270 <= mouse_x <= 330 and 10 <= mouse_y <= 45:
                 camera[1] -= camera_speed / zoom
                 return
-
-            if 235 <= mouse_x <= 295 and 45 <= mouse_y <= 80:
+            
+            if 10 <= mouse_x <= 70 and 280 <= mouse_y <= 315:
                 camera[0] -= camera_speed / zoom
                 return
 
-            if 305 <= mouse_x <= 365 and 45 <= mouse_y <= 80:
+            if 540 <= mouse_x <= 600 and 280 <= mouse_y <= 315:
                 camera[0] += camera_speed / zoom
                 return
 
-            if 270 <= mouse_x <= 330 and 80 <= mouse_y <= 115:
+            if 290 <= mouse_x <= 350 and 560 <= mouse_y <= 595:
                 camera[1] += camera_speed / zoom
                 return
             
