@@ -1,9 +1,11 @@
 import json
 import os
 import math
+import builtins
 
 import pygame
 import numpy as np
+
 
 import tkinter as tk
 
@@ -185,16 +187,29 @@ zoom = 1.0
 zoom_step = 0.1
 
 def world_to_screen(pos):
-    return np.array([
-        pos[0] * zoom,
-        pos[1] * zoom
-    ])
+    center = np.array([300.0, 300.0])
+
+    return center + (pos - center) * zoom
 
 def screen_to_world(pos):
-    return np.array([
-        pos[0] / zoom,
-        pos[1] / zoom
-    ])
+    center = np.array([300.0, 300.0])
+
+    return center + (pos - center) / zoom
+
+def format_distance(distance):
+    if distance >= 1000:
+        return f"{distance/1000:.2f} km"
+    else:
+        return f"{distance:.0f} m"
+
+def draw_distance():
+    visible_width = 600/zoom
+    text = font.render(f"Scale: {format_distance(visible_width)}", True, (0, 0, 0))
+
+    x = 600 - text.get_width() - 15
+    y = 600 - text.get_height() - 15
+
+    screen.blit(text, (x, y))
 
 def get_speed(body):
     return np.linalg.norm(body["vel"])
@@ -543,7 +558,9 @@ def draw():
 
     screen.blit(font.render("HELP", True, text_color), (40, 30))
 
+    draw_distance()
     draw_tooltip()
+    
 
 def update_bodies():
     acc = [np.array([0.0, 0.0]) for _ in bodies]
@@ -1144,3 +1161,4 @@ while True:
             
     draw()
     pygame.display.flip()
+
